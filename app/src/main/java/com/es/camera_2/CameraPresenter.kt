@@ -15,6 +15,7 @@ import android.view.Surface
 import android.view.TextureView
 import com.es.camera_2.CameraFragment.Companion.MAX_PREVIEW_HEIGHT
 import com.es.camera_2.CameraFragment.Companion.MAX_PREVIEW_WIDTH
+import com.es.camera_2.CameraFragment.Companion.STATE_WAITING_LOCK
 import com.es.camera_2.manager.ImageSaver
 import com.es.camera_2.manager.exceptions.CamStateException
 import com.es.camera_2.manager.exceptions.State
@@ -22,11 +23,22 @@ import com.es.camera_2.manager.extensions.HandlerElement
 import com.es.camera_2.utils.CompareSizesByArea
 import kotlinx.coroutines.*
 import kotlinx.coroutines.android.asCoroutineDispatcher
-import java.io.File
 import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
+import android.hardware.camera2.CameraAccessException
+import android.hardware.camera2.CameraCharacteristics
+import android.content.Context.CAMERA_SERVICE
+import android.graphics.drawable.ColorDrawable
+import android.support.v4.content.ContextCompat.getSystemService
+import android.hardware.camera2.CameraManager
+import android.media.Image
+import android.os.Build
+import android.view.View
+import java.io.*
+import java.nio.ByteBuffer
+
 
 class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
@@ -63,6 +75,9 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
      * A reference to the opened [CameraDevice].
      */
     private var cameraDevice: CameraDevice? = null
+
+
+    private lateinit var cameraManager: CameraManager
 
 
     /**
@@ -116,33 +131,90 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
      */
     private var captureSession: CameraCaptureSession? = null
 
+    private var lensFacing = CameraCharacteristics.LENS_FACING_BACK
+
+    private var isFlash = false
 
     /**
      * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
      * still image is ready to be saved.
      */
     private val onImageAvailableListener = ImageReader.OnImageAvailableListener {
-        launch(coroutineContext) {
-            file = view.createFile("", "visual_" + System.currentTimeMillis())
-            ImageSaver(it.acquireNextImage(), file)
+        Log.i("onImageAvailable" ,"!!")
+        launch(Dispatchers.IO +job) {
+            withCamContext{
+
+//                val mFile = createFile()
+//                ImageSaver(it.acquireNextImage(), mFile)
+
+                saveFile(it)
+
+            }
+        }
+
+    }
+
+
+    private fun saveFile(reader: ImageReader){
+
+        var image: Image? = null
+        try {
+            image = reader.acquireLatestImage()
+            var buffer: ByteBuffer = image.planes[0].buffer
+            var bytes = ByteArray(buffer.capacity())
+            buffer.get(bytes)
+            save(bytes)
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace();
+        } catch ( e: IOException) {
+            e.printStackTrace();
+        } finally {
+            if (image != null) {
+                image.close()
+            }
+        }
+
+
+    }
+    fun save(bytes: ByteArray) {
+        var output : OutputStream?= null
+        try {
+            output = FileOutputStream(createFile())
+            output.write(bytes)
+        } finally {
+            output?.close()
         }
     }
 
+
     override fun setView(view: CameraContract.View) {
         this.view = view
+        createFile()
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
-    override fun onResume(textureView: AutoFitTextureView) {
+    override fun onResume() {
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener)
+        reOpenCamera()
+    }
 
-        if (textureView.isAvailable) {
-            openCamera(textureView.width, textureView.height)
-        } else {
-            textureView.surfaceTextureListener = surfaceTextureListener
+   private fun createFile(): File {
+        file = view.createFile("", "visual_" + System.currentTimeMillis())
+       return file
+    }
+
+    @RequiresPermission(Manifest.permission.CAMERA)
+    private fun reOpenCamera(){
+        view.getTextureView().let {
+
+            if (it.isAvailable) {
+                openCamera(it.width, it.height)
+            } else {
+                it.surfaceTextureListener = surfaceTextureListener
+            }
         }
     }
 
@@ -153,6 +225,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         val manager = view.getCameraManager()
 
         manager?: return
+        cameraManager = manager
 
         setUpCameraOutputs(width, height, manager)
         configureTransform(width, height)
@@ -177,7 +250,6 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         } catch (e: RuntimeException) {
             e.printStackTrace()
         }
-//
 
     }
 
@@ -202,7 +274,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 // We don't use a front facing camera in this sample.
                 val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
                 if (cameraDirection != null &&
-                    cameraDirection == CameraCharacteristics.LENS_FACING_FRONT) {
+                    cameraDirection != lensFacing) {
                     continue
                 }
 
@@ -214,9 +286,14 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                     Arrays.asList(*map.getOutputSizes(ImageFormat.JPEG)),
                     CompareSizesByArea()
                 )
+
                 imageReader = ImageReader.newInstance(largest.width, largest.height,
-                    ImageFormat.JPEG, /*maxImages*/ 2).apply {
-                    setOnImageAvailableListener(onImageAvailableListener, null)
+                    ImageFormat.JPEG, /*maxImages*/ 3).apply {
+//                    launch {
+//                        withCamContext {
+                            setOnImageAvailableListener(onImageAvailableListener, null)
+//                        }
+//                    }
                 }
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
@@ -262,8 +339,8 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 // Check if the flash is supported.
                 flashSupported =
                     characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
-
-                this.cameraId = cameraId
+                Log.i("flashSupported",""+flashSupported)
+                this@CameraPresenter.cameraId = cameraId
 
                 // We've found a viable camera and finished setting up member variables,
                 // so we don't need to iterate through other available cameras.
@@ -414,6 +491,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
             )
             previewRequestBuilder.addTarget(surface)
 
+            // crash ending message to a Handler on a dead thread
             // Here, we create a CameraCaptureSession for camera preview.
             cameraDevice?.createCaptureSession(Arrays.asList(surface, imageReader?.surface),
                 object : CameraCaptureSession.StateCallback() {
@@ -454,11 +532,31 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
     }
 
     private fun setAutoFlash(requestBuilder: CaptureRequest.Builder) {
-        if (flashSupported) {
+//        if (flashSupported) {
             requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
                 CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+
+//        }
+    }
+
+    private fun setFlash() {
+        previewRequestBuilder.let{
+            if(!isFlash) {
+                it.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                it.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH)
+            } else {
+                it.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+                it.set(CaptureRequest.FLASH_MODE, CaptureRequest.FLASH_MODE_OFF)
+            }
+            previewRequest = it.build()
+
+            captureSession?.let { session ->
+                session.setRepeatingRequest(previewRequest, null, null)
+                isFlash = !isFlash
+            }
         }
     }
+
 
 
 
@@ -477,7 +575,11 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         private fun process(result: CaptureResult) {
             when (state) {
                 CameraFragment.STATE_PREVIEW -> Unit // Do nothing when the camera preview is working normally.
-                CameraFragment.STATE_WAITING_LOCK -> capturePicture(result)
+                CameraFragment.STATE_WAITING_LOCK -> launch(Dispatchers.Main + job){
+//                        withCamContext {
+                            capturePicture(result)
+//                        }
+                    }
                 CameraFragment.STATE_WAITING_PRECAPTURE -> {
                     // CONTROL_AE_STATE can be null on some devices
                     val aeState = result.get(CaptureResult.CONTROL_AE_STATE)
@@ -572,6 +674,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 abortCaptures()
                 capture(captureBuilder?.build(), captureCallback, null)
             }
+
         } catch (e: CameraAccessException) {
             Log.e(TAG, e.toString())
         }
@@ -588,13 +691,33 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
             previewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
                 CameraMetadata.CONTROL_AF_TRIGGER_CANCEL)
             setAutoFlash(previewRequestBuilder)
-            launch {
+
+            captureSession?.capture(previewRequestBuilder.build(), captureCallback,
+                null)
+            // After this, the camera will go back to the normal state of preview.
+            state = CameraFragment.STATE_PREVIEW
+            captureSession?.setRepeatingRequest(previewRequest, captureCallback,
+                null)
+        } catch (e: CameraAccessException) {
+            Log.e(TAG, e.toString())
+        }
+
+    }
+
+    /**
+     * Lock the focus as the first step for a still image capture.
+     */
+    private fun lockFocus() {
+        try {
+            // This is how to tell the camera to lock focus.
+            previewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                CameraMetadata.CONTROL_AF_TRIGGER_START)
+            // Tell #captureCallback to wait for the lock.
+            state = STATE_WAITING_LOCK
+
+            launch(Dispatchers.Main + job) {
 
                 captureSession?.capture(previewRequestBuilder.build(), captureCallback,
-                    null)
-                // After this, the camera will go back to the normal state of preview.
-                state = CameraFragment.STATE_PREVIEW
-                captureSession?.setRepeatingRequest(previewRequest, captureCallback,
                     null)
             }
         } catch (e: CameraAccessException) {
@@ -615,7 +738,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START)
             // Tell #captureCallback to wait for the precapture sequence to be set.
             state = CameraFragment.STATE_WAITING_PRECAPTURE
-            launch(coroutineContext) {
+            async(Dispatchers.Main + job) {
                 captureSession?.capture(previewRequestBuilder.build(), captureCallback,
                     null)
             }
@@ -630,14 +753,35 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
     }
 
     override fun onClickCaptureButton() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        lockFocus()
+
+        view.setBackgroundColor()
     }
 
+    @RequiresPermission(Manifest.permission.CAMERA)
     override fun onClickSwitchButton() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        switchCamera()
     }
 
     override fun onClickFlashButton() {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        setFlash()
     }
+
+    @RequiresPermission(Manifest.permission.CAMERA)
+    private fun switchCamera() {
+
+        if(lensFacing == CameraCharacteristics.LENS_FACING_BACK) {
+            lensFacing = CameraCharacteristics.LENS_FACING_FRONT
+            cameraDevice?.close()
+            view.setVisibleFlashBtn(View.GONE)
+            reOpenCamera()
+
+        } else if (lensFacing == CameraCharacteristics.LENS_FACING_FRONT) {
+            lensFacing = CameraCharacteristics.LENS_FACING_BACK
+            cameraDevice?.close()
+            view.setVisibleFlashBtn(View.VISIBLE)
+            reOpenCamera()
+        }
+    }
+
 }

@@ -31,6 +31,12 @@ interface CameraContract {
 
         fun getSurfaceTexture(): SurfaceTexture
 
+        fun getTextureView(): AutoFitTextureView
+
+        fun setVisibleFlashBtn(visible: Int)
+
+        fun setBackgroundColor()
+
     }
 
     interface Presenter {
@@ -43,7 +49,7 @@ interface CameraContract {
 
         fun onClickFlashButton()
 
-        fun onResume(textureView: AutoFitTextureView)
+        fun onResume()
 
         fun onDestroy()
 

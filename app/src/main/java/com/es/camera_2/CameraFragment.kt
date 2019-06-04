@@ -3,18 +3,24 @@ package com.es.camera_2
 import android.Manifest
 import android.content.Context
 import android.graphics.*
+import android.graphics.drawable.ColorDrawable
 import android.hardware.camera2.*
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.support.annotation.RequiresPermission
+import android.support.constraint.ConstraintLayout
 import android.support.v4.app.Fragment
 import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
+import android.widget.ImageButton
 import com.es.camera_2.dialog.ErrorDialog
 import com.es.camera_2.manager.extensions.HandlerElement
+import com.es.camera_2.utils.ANIMATION_FAST_MILLIS
+import com.es.camera_2.utils.ANIMATION_SLOW_MILLIS
 import com.es.camera_2.utils.CompareSizesByArea
 import com.es.camera_2.utils.showToast
 import kotlinx.coroutines.*
@@ -30,6 +36,10 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
     private lateinit var textureView: AutoFitTextureView
 
     private var presenter: CameraContract.Presenter = CameraPresenter()
+
+    private lateinit var flashButton: ImageButton
+
+    private lateinit var container: ConstraintLayout
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,23 +58,21 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         super.onViewCreated(view, savedInstanceState)
         view.findViewById<View>(R.id.camera_capture_button).setOnClickListener(this)
         view.findViewById<View>(R.id.camera_switch_button).setOnClickListener(this)
-        view.findViewById<View>(R.id.flash_button).setOnClickListener(this)
+        flashButton = view.findViewById(R.id.flash_button)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flashButton.visibility = View.VISIBLE
+            flashButton.setOnClickListener(this)
+        } else {
+            flashButton.visibility = View.GONE
+        }
+
+        container = view.findViewById(R.id.camera_container)
         textureView = view.findViewById(R.id.texture)
         presenter.setView(this)
     }
 
-
-
-
-
-    suspend fun withMainContext(block: suspend CoroutineScope.() -> Unit) {
-        try {
-            val handler = Handler(Looper.getMainLooper())
-            @Suppress("DEPRECATION")
-            withContext(Dispatchers.Main+ HandlerElement(handler), block)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+    override fun setVisibleFlashBtn(visible: Int) {
+        flashButton.visibility = visible
     }
 
     override fun getCameraManager(): CameraManager? {
@@ -104,14 +112,9 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         return textureView.surfaceTexture
     }
 
-
-
-
-
-
-
-
-
+    override fun getTextureView(): AutoFitTextureView {
+        return textureView
+    }
 
     override fun onClick(v: View) {
         when (v.id) {
@@ -213,12 +216,28 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
     @RequiresPermission(Manifest.permission.CAMERA)
     override fun onResume() {
         super.onResume()
-        presenter.onResume(textureView)
+        presenter.onResume()
     }
 
     override fun onDestroy() {
         // Stop the coroutines as the context gets destroyed
         presenter.onDestroy()
         super.onDestroy()
+    }
+
+    override fun onActivityCreated(savedInstanceState: Bundle?) {
+        super.onActivityCreated(savedInstanceState)
+    }
+
+    override fun setBackgroundColor() {
+        // We can only change the foreground Drawable using API level 23+ API
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+            // Display flash animation to indicate that photo was captured
+            container.postDelayed({
+                container.foreground = ColorDrawable(Color.WHITE)
+                container.postDelayed({ container.foreground = null }, ANIMATION_FAST_MILLIS)
+            }, ANIMATION_SLOW_MILLIS)
+        }
     }
 }
