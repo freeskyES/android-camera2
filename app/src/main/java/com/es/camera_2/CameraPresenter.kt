@@ -147,44 +147,13 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 //                val mFile = createFile()
 //                ImageSaver(it.acquireNextImage(), mFile)
 
-                saveFile(it)
+                ImageSaver(it, createFile()).saveFile()
 
             }
         }
 
     }
 
-
-    private fun saveFile(reader: ImageReader){
-
-        var image: Image? = null
-        try {
-            image = reader.acquireLatestImage()
-            var buffer: ByteBuffer = image.planes[0].buffer
-            var bytes = ByteArray(buffer.capacity())
-            buffer.get(bytes)
-            save(bytes)
-        } catch (e: FileNotFoundException) {
-            e.printStackTrace();
-        } catch ( e: IOException) {
-            e.printStackTrace();
-        } finally {
-            if (image != null) {
-                image.close()
-            }
-        }
-
-
-    }
-    fun save(bytes: ByteArray) {
-        var output : OutputStream?= null
-        try {
-            output = FileOutputStream(createFile())
-            output.write(bytes)
-        } finally {
-            output?.close()
-        }
-    }
 
 
     override fun setView(view: CameraContract.View) {
@@ -288,7 +257,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 )
 
                 imageReader = ImageReader.newInstance(largest.width, largest.height,
-                    ImageFormat.JPEG, /*maxImages*/ 3).apply {
+                    ImageFormat.JPEG, /*maxImages*/ 10).apply {
 //                    launch {
 //                        withCamContext {
                             setOnImageAvailableListener(onImageAvailableListener, null)
@@ -603,6 +572,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         private fun capturePicture(result: CaptureResult) {
             val afState = result.get(CaptureResult.CONTROL_AF_STATE)
             if (afState == null) {
+                state = CameraFragment.STATE_PICTURE_TAKEN //add*
                 captureStillPicture()
             } else if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
                 || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) {
@@ -717,6 +687,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
             launch(Dispatchers.Main + job) {
 
+//                captureStillPicture()
                 captureSession?.capture(previewRequestBuilder.build(), captureCallback,
                     null)
             }

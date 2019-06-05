@@ -23,7 +23,8 @@
             android:contentDescription="@string/switch_camera_button_alt"
             android:layout_width="70dp" android:layout_height="70dp"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/linearLayout"/>
+            android:layout_marginStart="60dp" android:layout_marginBottom="68dp"
+            app:layout_constraintBottom_toBottomOf="parent"/>
 
     <ImageButton
             android:id="@+id/flash_button"
@@ -32,29 +33,31 @@
             android:contentDescription="@string/gallery_button_alt"
             android:layout_width="70dp" android:layout_height="70dp"
             app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/linearLayout"/>
+            android:layout_marginRight="60dp" android:layout_marginBottom="68dp"
+            app:layout_constraintBottom_toBottomOf="parent"/>
+    <!--app:layout_constraintBottom_toTopOf="@+id/linearLayout"-->
+    <!--<LinearLayout-->
+            <!--android:gravity="center"-->
+            <!--android:orientation="horizontal"-->
+            <!--android:layout_width="match_parent" android:layout_height="200dp"-->
+            <!--android:id="@+id/linearLayout"-->
+            <!--app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintStart_toStartOf="parent"-->
+            <!--app:layout_constraintEnd_toEndOf="parent">-->
 
-    <LinearLayout
-            android:gravity="center"
-            android:orientation="horizontal"
-            android:layout_width="match_parent" android:layout_height="200dp"
-            android:id="@+id/linearLayout"
-            app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+    <ImageButton
+            android:id="@+id/camera_capture_button"
+            android:src="@drawable/ic_shutter"
+            android:scaleType="centerCrop"
+            android:contentDescription="@string/capture_button_alt"
+            android:background="@android:color/transparent"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            android:layout_width="70dp"
+            android:layout_height="70dp" android:layout_marginBottom="68dp"
+            app:layout_constraintHorizontal_bias="0.498"/>
 
-        <ImageButton
-                android:id="@+id/camera_capture_button"
-                android:src="@drawable/ic_shutter"
-                android:scaleType="centerCrop"
-                android:contentDescription="@string/capture_button_alt"
-                android:background="@android:color/transparent"
-                app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent"
-                app:layout_constraintBottom_toBottomOf="parent"
-                android:layout_width="70dp"
-                android:layout_height="70dp"/>
-
-    </LinearLayout>
+    <!--</LinearLayout>-->
 
 
 </android.support.constraint.ConstraintLayout>

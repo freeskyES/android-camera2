@@ -69,7 +69,9 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         container = view.findViewById(R.id.camera_container)
         textureView = view.findViewById(R.id.texture)
         presenter.setView(this)
+
     }
+
 
     override fun setVisibleFlashBtn(visible: Int) {
         flashButton.visibility = visible
@@ -202,13 +204,13 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
 
             // Pick the smallest of those big enough. If there is no one big enough, pick the
             // largest of those not big enough.
-            if (bigEnough.size > 0) {
-                return Collections.min(bigEnough, CompareSizesByArea())
+            return if (bigEnough.size > 0) {
+                Collections.min(bigEnough, CompareSizesByArea())
             } else if (notBigEnough.size > 0) {
-                return Collections.max(notBigEnough, CompareSizesByArea())
+                Collections.max(notBigEnough, CompareSizesByArea())
             } else {
                 Log.e("CameraFragment", "Couldn't find any suitable preview size")
-                return choices[0]
+                choices[0]
             }
         }
     }
@@ -240,4 +242,6 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
             }, ANIMATION_SLOW_MILLIS)
         }
     }
+
+
 }

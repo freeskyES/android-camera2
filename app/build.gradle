@@ -44,4 +44,7 @@ dependencies {
 
     implementation "android.arch.navigation:navigation-fragment-ktx:1.0.0"
     implementation "android.arch.navigation:navigation-ui-ktx:1.0.0"
+
+//    def camerax_version = "1.0.0-alpha01"
+//    implementation "androidx..camera:camera-core:${camerax_version}"
 }
