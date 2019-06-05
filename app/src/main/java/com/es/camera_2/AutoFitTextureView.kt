@@ -18,6 +18,7 @@ package com.es.camera_2
 
 import android.content.Context
 import android.util.AttributeSet
+import android.util.Log
 import android.view.TextureView
 import android.view.View
 
@@ -47,6 +48,7 @@ class AutoFitTextureView @JvmOverloads constructor(
         }
         ratioWidth = width
         ratioHeight = height
+        Log.i("setAspectRatio", "$width/$height")
         requestLayout()
     }
 

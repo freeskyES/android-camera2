@@ -35,9 +35,13 @@ import android.support.v4.content.ContextCompat.getSystemService
 import android.hardware.camera2.CameraManager
 import android.media.Image
 import android.os.Build
+import android.util.DisplayMetrics
 import android.view.View
 import java.io.*
 import java.nio.ByteBuffer
+import java.util.Objects.compare
+import kotlin.Comparator
+import kotlin.collections.ArrayList
 
 
 class CameraPresenter: CameraContract.Presenter, CoroutineScope {
@@ -274,27 +278,32 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 val displayRotation = defaultDisplay.rotation
 
                 sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)
-                val swappedDimensions = areDimensionsSwapped(displayRotation)
+//                val swappedDimensions = areDimensionsSwapped(displayRotation)
+
+//                val metrics = DisplayMetrics().also { defaultDisplay.getRealMetrics(it) }
+//                val screenSize = Size(metrics.widthPixels, metrics.heightPixels)
 
                 val displaySize = Point()
                 defaultDisplay.getSize(displaySize)
-                val rotatedPreviewWidth = if (swappedDimensions) height else width
-                val rotatedPreviewHeight = if (swappedDimensions) width else height
-                var maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
-                var maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
+//                val rotatedPreviewWidth = if (swappedDimensions) height else width
+//                val rotatedPreviewHeight = if (swappedDimensions) width else height
+//                var maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
+//                var maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
 
-                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) maxPreviewWidth = MAX_PREVIEW_WIDTH
-                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) maxPreviewHeight = MAX_PREVIEW_HEIGHT
+//                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) maxPreviewWidth = MAX_PREVIEW_WIDTH
+//                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) maxPreviewHeight = MAX_PREVIEW_HEIGHT
 
-                // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
-                // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
-                // garbage capture data.
-                previewSize = CameraFragment.chooseOptimalSize(
-                    map.getOutputSizes(SurfaceTexture::class.java),
-                    rotatedPreviewWidth, rotatedPreviewHeight,
-                    maxPreviewWidth, maxPreviewHeight,
-                    largest
-                )
+//                 Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
+//                 bus' bandwidth limitation, resulting in gorgeous previews but the storage of
+//                 garbage capture data.
+//                previewSize = CameraFragment.chooseOptimalSize(
+//                    map.getOutputSizes(SurfaceTexture::class.java),
+//                    rotatedPreviewWidth, rotatedPreviewHeight,
+//                    screenSize.width, screenSize.height,
+//                    largest
+//                )
+
+                previewSize = getPreferredPreviewSize(map.getOutputSizes(SurfaceTexture::class.java), width, height)//screenSize
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 if (view.getResources()?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -302,7 +311,6 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 } else {
                     view.setAspectRatioTextureView(previewSize.height, previewSize.width)
                 }
-
 
 
                 // Check if the flash is supported.
@@ -323,6 +331,34 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
             view.showErrorDialog()
         }
 
+    }
+
+    private fun getPreferredPreviewSize(mapSizes: Array<Size>, width: Int , height: Int): Size {
+        var collectorSizes: MutableList<Size> = ArrayList()
+        for (option: Size in mapSizes) {
+            if (width > height) {
+                if (option.width > width &&
+                    option.height > height
+                ) {
+                    collectorSizes.add(option);
+                }
+            } else {
+                if (option.width > height &&
+                    option.height > width
+                ) {
+                    collectorSizes.add(option);
+                }
+            }
+        }
+        if (collectorSizes.isNotEmpty()) {
+            return Collections.min(collectorSizes, object : Comparator<Size> {
+                override fun compare(p0: Size?, p1: Size?): Int {
+                    return (p0!!.width * p0.height - p1!!.width * p1.height)
+                }
+            })
+        }
+
+        return mapSizes[0]
     }
 
     /**

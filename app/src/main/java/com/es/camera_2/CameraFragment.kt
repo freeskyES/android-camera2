@@ -176,43 +176,43 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         @JvmStatic
         fun newInstance() :CameraFragment = CameraFragment()
 
-        @JvmStatic fun chooseOptimalSize(
-            choices: Array<Size>,
-            textureViewWidth: Int,
-            textureViewHeight: Int,
-            maxWidth: Int,
-            maxHeight: Int,
-            aspectRatio: Size
-        ): Size {
-
-            // Collect the supported resolutions that are at least as big as the preview Surface
-            val bigEnough = ArrayList<Size>()
-            // Collect the supported resolutions that are smaller than the preview Surface
-            val notBigEnough = ArrayList<Size>()
-            val w = aspectRatio.width
-            val h = aspectRatio.height
-            for (option in choices) {
-                if (option.width <= maxWidth && option.height <= maxHeight &&
-                    option.height == option.width * h / w) {
-                    if (option.width >= textureViewWidth && option.height >= textureViewHeight) {
-                        bigEnough.add(option)
-                    } else {
-                        notBigEnough.add(option)
-                    }
-                }
-            }
-
-            // Pick the smallest of those big enough. If there is no one big enough, pick the
-            // largest of those not big enough.
-            return if (bigEnough.size > 0) {
-                Collections.min(bigEnough, CompareSizesByArea())
-            } else if (notBigEnough.size > 0) {
-                Collections.max(notBigEnough, CompareSizesByArea())
-            } else {
-                Log.e("CameraFragment", "Couldn't find any suitable preview size")
-                choices[0]
-            }
-        }
+//        @JvmStatic fun chooseOptimalSize(
+//            choices: Array<Size>,
+//            textureViewWidth: Int,
+//            textureViewHeight: Int,
+//            maxWidth: Int,
+//            maxHeight: Int,
+//            aspectRatio: Size
+//        ): Size {
+//
+//            // Collect the supported resolutions that are at least as big as the preview Surface
+//            val bigEnough = ArrayList<Size>()
+//            // Collect the supported resolutions that are smaller than the preview Surface
+//            val notBigEnough = ArrayList<Size>()
+//            val w = aspectRatio.width
+//            val h = aspectRatio.height
+//            for (option in choices) {
+//                if (option.width <= maxWidth && option.height <= maxHeight &&
+//                    option.height == option.width * h / w) {
+//                    if (option.width >= textureViewWidth && option.height >= textureViewHeight) {
+//                        bigEnough.add(option)
+//                    } else {
+//                        notBigEnough.add(option)
+//                    }
+//                }
+//            }
+//
+//            // Pick the smallest of those big enough. If there is no one big enough, pick the
+//            // largest of those not big enough.
+//            return if (bigEnough.size > 0) {
+//                Collections.min(bigEnough, CompareSizesByArea())
+//            } else if (notBigEnough.size > 0) {
+//                Collections.max(notBigEnough, CompareSizesByArea())
+//            } else {
+//                Log.e("CameraFragment", "Couldn't find any suitable preview size")
+//                choices[0]
+//            }
+//        }
     }
 
     @RequiresPermission(Manifest.permission.CAMERA)
