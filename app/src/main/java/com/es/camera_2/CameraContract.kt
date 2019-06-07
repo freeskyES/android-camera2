@@ -4,7 +4,10 @@ import android.content.res.Resources
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraManager
+import android.support.v4.content.LocalBroadcastManager
 import android.view.Display
+import android.view.MotionEvent
+import com.es.camera_2.utils.AutoFitTextureView
 import java.io.File
 
 interface CameraContract {
@@ -37,6 +40,7 @@ interface CameraContract {
 
         fun setBackgroundColor()
 
+        fun simulateClick()
     }
 
     interface Presenter {
@@ -49,9 +53,13 @@ interface CameraContract {
 
         fun onClickFlashButton()
 
+        fun onMultiTouchTextureView(event: MotionEvent)
+
         fun onResume()
 
         fun onDestroy()
+
+        fun onDestroyView(localBroadcastManager: LocalBroadcastManager)
 
     }
 }

@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package com.es.camera_2
+package com.es.camera_2.utils
 
 import android.content.Context
 import android.util.AttributeSet
 import android.util.Log
+import android.view.MotionEvent
 import android.view.TextureView
 import android.view.View
 
@@ -33,6 +34,7 @@ class AutoFitTextureView @JvmOverloads constructor(
 
     private var ratioWidth = 0
     private var ratioHeight = 0
+    private lateinit var callback: OnMultiTouch
 
     /**
      * Sets the aspect ratio for this view. The size of the view will be measured based on the ratio
@@ -65,6 +67,47 @@ class AutoFitTextureView @JvmOverloads constructor(
                 setMeasuredDimension(height * ratioWidth / ratioHeight, height)
             }
         }
+    }
+
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        super.onTouchEvent(event)
+
+        event ?: return false
+
+//        Log.i("onTouchEvent", "event:$event /${event.pointerCount}")
+
+        if ((event.pointerCount >= 2 &&
+                    (event.action == MotionEvent.ACTION_MOVE)) ||
+            (event.action == MotionEvent.ACTION_UP &&
+                    event.pointerCount == 1)
+            ){
+            //multi touch
+            callback.multiTouchCallback(event)
+            return true
+        }
+
+
+        return when(event.action) {
+            MotionEvent.ACTION_DOWN -> true
+            MotionEvent.ACTION_UP -> {
+                performClick()
+                true
+            }
+            else -> false
+        }
+    }
+
+    fun setOnTouchCallback(callback: OnMultiTouch) {
+        this.callback = callback
+    }
+
+    interface OnMultiTouch{
+        fun multiTouchCallback(event: MotionEvent)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 
 }

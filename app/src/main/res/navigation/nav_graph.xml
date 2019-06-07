@@ -30,7 +30,7 @@
 
     <fragment
         android:id="@+id/permissionsFragment"
-        android:name="com.es.camera_2.PermissionsFragment"
+        android:name="com.es.camera_2.permission.PermissionsFragment"
         android:label="PermissionsFragment" >
         <action
             android:id="@+id/action_permissions_to_camera"

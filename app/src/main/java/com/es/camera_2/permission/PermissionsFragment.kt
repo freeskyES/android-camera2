@@ -1,5 +1,5 @@
 
-package com.es.camera_2
+package com.es.camera_2.permission
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -9,12 +9,14 @@ import android.support.v4.content.ContextCompat
 import android.widget.Toast
 import androidx.navigation.NavOptions
 import androidx.navigation.Navigation
+import com.es.camera_2.R
 
 
 private const val PERMISSIONS_REQUEST_CODE = 10
 private val PERMISSIONS_REQUIRED = arrayOf(
         Manifest.permission.CAMERA,
-        Manifest.permission.RECORD_AUDIO)
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
 /**
  * The sole purpose of this fragment is to request permissions and, once granted, display the
@@ -28,11 +30,15 @@ class PermissionsFragment : Fragment() {
 
         if (!hasPermissions()) {
             // Request camera-related permissions
-            requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
+            requestPermissions(
+                PERMISSIONS_REQUIRED,
+                PERMISSIONS_REQUEST_CODE
+            )
         } else {
             // If permissions have already been granted, proceed
             Navigation.findNavController(requireActivity(), R.id.fragment_container)
-                    .navigate(R.id.action_permissions_to_camera, null,
+                    .navigate(
+                        R.id.action_permissions_to_camera, null,
                             navOptions)
         }
 
@@ -56,7 +62,8 @@ class PermissionsFragment : Fragment() {
                 // Take the user to the success fragment when permission is granted
                 Toast.makeText(context, "Permission request granted", Toast.LENGTH_LONG).show()
                 Navigation.findNavController(requireActivity(), R.id.fragment_container)
-                        .navigate(R.id.action_permissions_to_camera, null,
+                        .navigate(
+                            R.id.action_permissions_to_camera, null,
                                 navOptions)
             } else {
                 Toast.makeText(context, "Permission request denied", Toast.LENGTH_LONG).show()

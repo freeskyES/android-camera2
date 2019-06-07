@@ -1,6 +1,9 @@
 package com.es.camera_2
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
@@ -11,14 +14,9 @@ import android.support.annotation.RequiresApi
 import android.support.annotation.RequiresPermission
 import android.util.Log
 import android.util.Size
-import android.view.Surface
-import android.view.TextureView
-import com.es.camera_2.CameraFragment.Companion.MAX_PREVIEW_HEIGHT
-import com.es.camera_2.CameraFragment.Companion.MAX_PREVIEW_WIDTH
 import com.es.camera_2.CameraFragment.Companion.STATE_WAITING_LOCK
 import com.es.camera_2.manager.ImageSaver
 import com.es.camera_2.manager.exceptions.CamStateException
-import com.es.camera_2.manager.exceptions.State
 import com.es.camera_2.manager.extensions.HandlerElement
 import com.es.camera_2.utils.CompareSizesByArea
 import kotlinx.coroutines.*
@@ -29,17 +27,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
-import android.content.Context.CAMERA_SERVICE
-import android.graphics.drawable.ColorDrawable
-import android.support.v4.content.ContextCompat.getSystemService
 import android.hardware.camera2.CameraManager
-import android.media.Image
-import android.os.Build
-import android.util.DisplayMetrics
-import android.view.View
+import android.support.v4.content.LocalBroadcastManager
+import android.view.*
 import java.io.*
-import java.nio.ByteBuffer
-import java.util.Objects.compare
 import kotlin.Comparator
 import kotlin.collections.ArrayList
 
@@ -139,6 +130,16 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
     private var isFlash = false
 
+    //**
+
+    //Zooming
+    private var fingerSpacing = 0.0f
+    private var zoomLevel = 1f
+    private var maximumZoomLevel: Float = 0.0f
+    private var zoom: Rect? = null
+
+    private lateinit var characteristics: CameraCharacteristics
+
     /**
      * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
      * still image is ready to be saved.
@@ -158,8 +159,6 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
     }
 
-
-
     override fun setView(view: CameraContract.View) {
         this.view = view
         createFile()
@@ -171,11 +170,12 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener)
+        // 카메라 방향 가져오기 (static 변수로 전환)
         reOpenCamera()
     }
 
    private fun createFile(): File {
-        file = view.createFile("", "visual_" + System.currentTimeMillis())
+        file = view.createFile("", "visual_" + System.currentTimeMillis() +".jpeg")
        return file
     }
 
@@ -242,7 +242,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
         try {
             for (cameraId in manager.cameraIdList) {
-                val characteristics = manager.getCameraCharacteristics(cameraId)
+                characteristics = manager.getCameraCharacteristics(cameraId)
 
                 // We don't use a front facing camera in this sample.
                 val cameraDirection = characteristics.get(CameraCharacteristics.LENS_FACING)
@@ -318,13 +318,14 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                     characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
                 Log.i("flashSupported",""+flashSupported)
                 this@CameraPresenter.cameraId = cameraId
+                maximumZoomLevel = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
 
                 // We've found a viable camera and finished setting up member variables,
                 // so we don't need to iterate through other available cameras.
                 return
             }
         } catch (e: CameraAccessException) {
-            Log.e(TAG, e.toString())
+            e.printStackTrace()
         } catch (e: NullPointerException) {
             // Currently an NPE is thrown when the Camera2API is used but not supported on the
             // device this code runs.
@@ -443,27 +444,42 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 cameraDevice = camera
                 createCameraPreviewSession()
                 cameraOpenCloseLock.release()
+
 //                openedCameraAsync.complete(camera)
             }
 
             override fun onDisconnected(camera: CameraDevice) {
                 Log.i("onDisconnected", "camera : $camera")
                 this@CameraPresenter.cameraDevice = null
-                cameraOpenCloseLock.release()
-                completionAsync.completeExceptionally(CamStateException(State.Disconnected))
-                camera.close()
+                try {
+
+                    cameraOpenCloseLock.release()
+//                    completionAsync.completeExceptionally(CamStateException(State.Disconnected))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
 
             override fun onError(camera: CameraDevice, error: Int) {
                 Log.i("onError", "camera : $camera $error")
-                onDisconnected(camera)
-                completionAsync.completeExceptionally(CamStateException(State.Error(error)))
-                view.finish()
+                try {
+                    onDisconnected(camera)
+                    camera?.close()
+//                    completionAsync.completeExceptionally(CamStateException(State.Error(error)))
+                    view.finish()
+                } catch (e: CamStateException) {
+                    e.printStackTrace()
+                }
+
             }
 
             override fun onClosed(camera: CameraDevice) {
                 Log.i("onClosed", "camera : $camera")
-                closedAsync.complete(Unit)
+                try {
+                    closedAsync.complete(Unit)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
 
@@ -507,6 +523,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
                         // When the session is ready, we start displaying the preview.
                         captureSession = cameraCaptureSession
+
                         try {
                             // Auto focus should be continuous for camera preview.
                             previewRequestBuilder.set(
@@ -518,10 +535,12 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                             // Finally, we start displaying the camera preview.
                             previewRequest = previewRequestBuilder.build()
 
-                            captureSession?.setRepeatingRequest(previewRequest, captureCallback, null)
+                            captureSession?.apply {
+                                setRepeatingRequest(previewRequest, captureCallback, null)
+                            }
 
                         } catch (e: CameraAccessException) {
-                            Log.e(TAG, e.toString())
+                            e.printStackTrace()
                         }
 
                     }
@@ -662,6 +681,9 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 // Use the same AE and AF modes as the preview.
                 set(CaptureRequest.CONTROL_AF_MODE,
                     CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
+
+                // zoom
+                zoom?.let {set(CaptureRequest.SCALER_CROP_REGION, zoom)}
             }?.also { setAutoFlash(it) }
 
             val captureCallback = object : CameraCaptureSession.CaptureCallback() {
@@ -755,13 +777,36 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
     }
 
+    // Volume down button receiver
+    private val volumeDownReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val keyCode = intent.getIntExtra(KEY_EVENT_EXTRA, KeyEvent.KEYCODE_UNKNOWN)
+            when (keyCode) {
+                // When the volume down button is pressed, simulate a shutter button click
+                KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    view.simulateClick()
+                }
+            }
+        }
+    }
+
+    override fun onDestroyView(localBroadcastManager: LocalBroadcastManager) {
+
+        // Unregister the broadcast receivers
+        localBroadcastManager.unregisterReceiver(volumeDownReceiver)
+
+        // Turn off all camera operations when we navigate away
+        job.cancel()
+        cameraDevice?.close() //*crash Handler ending message to a Handler on a dead thread
+    }
+
     override fun onDestroy() {
         job.cancel()
+        cameraDevice?.close()
     }
 
     override fun onClickCaptureButton() {
         lockFocus()
-
         view.setBackgroundColor()
     }
 
@@ -791,4 +836,75 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         }
     }
 
+    override fun onMultiTouchTextureView(event: MotionEvent) {
+//        Log.i("onMultiTouchTextureView", "event:$event +$fingerSpacing")
+
+
+        try {
+            val rect = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+            rect?: return
+
+            if (event.action == MotionEvent.ACTION_UP)  {
+                fingerSpacing = 0.0f
+                return
+            }
+
+            var currentFingerSpacing = getFingerSpacing(event)
+
+            if(fingerSpacing == 0.0f) {
+                fingerSpacing = currentFingerSpacing
+                return
+            }
+
+            val fingerSpacingValid = 6
+
+            var absoluteValue = Math.abs((fingerSpacing- currentFingerSpacing).toDouble()).toFloat() //Math.sqrt(Math.abs((fingerSpacing- currentFingerSpacing).pow(2).toDouble())).toFloat()
+//            Log.i("absoluteValue", "value : $absoluteValue /$fingerSpacing $currentFingerSpacing")
+
+            if (absoluteValue > fingerSpacingValid) {
+
+                var delta = 0.2f//0.05f //Control this value to control the zooming sensibility
+
+                if (currentFingerSpacing > fingerSpacing) { // 확대, Don't over zoom-in
+                    if ((maximumZoomLevel.minus(zoomLevel)) <= delta) {
+                        delta = maximumZoomLevel - zoomLevel
+                    }
+                    zoomLevel += delta
+                } else if (currentFingerSpacing < fingerSpacing){ // 축소, Don't over zoom-out
+                    if ((zoomLevel - delta) < 1f) {
+                        delta = zoomLevel - 1f
+                    }
+                    zoomLevel -= delta
+                }
+
+                val ratio = 1.toFloat() / zoomLevel
+                Log.i("ratio", "ratio : $ratio / zoomLevel $zoomLevel")
+
+                val croppedWidth = rect.width() - Math.round(rect.width().toFloat() * ratio)
+                val croppedHeight = rect.height() - Math.round(rect.height().toFloat() * ratio)
+                Log.i("cropped", "Width : $croppedWidth")
+                Log.i("cropped", "Height : $croppedHeight")
+
+                zoom = Rect(croppedWidth/2, croppedHeight/2,
+                    rect.width() - croppedWidth/2, rect.height() - croppedHeight/2)
+                previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+
+                launch(Dispatchers.Main +job) {
+                    fingerSpacing = currentFingerSpacing
+                    captureSession?.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, null)
+                }
+            }
+
+
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun getFingerSpacing(event: MotionEvent): Float {
+        val x = event.getX(0) - event.getX(1)
+        val y = event.getY(0) - event.getY(1)
+        return Math.sqrt((x * x + y * y).toDouble()).toFloat()
+    }
 }

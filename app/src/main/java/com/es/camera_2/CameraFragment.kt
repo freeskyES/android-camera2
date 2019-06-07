@@ -7,29 +7,20 @@ import android.graphics.drawable.ColorDrawable
 import android.hardware.camera2.*
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.os.Environment
 import android.support.annotation.RequiresPermission
 import android.support.constraint.ConstraintLayout
 import android.support.v4.app.Fragment
-import android.util.Log
-import android.util.Size
+import android.support.v4.content.LocalBroadcastManager
 import android.util.SparseIntArray
 import android.view.*
 import android.widget.ImageButton
 import com.es.camera_2.dialog.ErrorDialog
-import com.es.camera_2.manager.extensions.HandlerElement
-import com.es.camera_2.utils.ANIMATION_FAST_MILLIS
-import com.es.camera_2.utils.ANIMATION_SLOW_MILLIS
-import com.es.camera_2.utils.CompareSizesByArea
-import com.es.camera_2.utils.showToast
-import kotlinx.coroutines.*
+import com.es.camera_2.utils.*
 import java.io.File
-import java.lang.Exception
-import java.util.*
 
 
-class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
+class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View, AutoFitTextureView.OnMultiTouch{
 
     private val TAG = "CameraFragment"
 
@@ -44,6 +35,8 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Mark this as a retain fragment, so the lifecycle does not get restarted on config change
+        retainInstance = true
     }
 
     override fun onCreateView(
@@ -68,10 +61,15 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
 
         container = view.findViewById(R.id.camera_container)
         textureView = view.findViewById(R.id.texture)
+        textureView.setOnTouchCallback(this)
         presenter.setView(this)
 
+        textureView.performClick()
     }
 
+    override fun multiTouchCallback(event: MotionEvent) {
+        presenter.onMultiTouchTextureView(event)
+    }
 
     override fun setVisibleFlashBtn(visible: Int) {
         flashButton.visibility = visible
@@ -90,7 +88,7 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
     }
 
     override fun createFile(dirName: String, fileName: String): File {
-        return File(activity?.getExternalFilesDir(null), fileName)
+        return File(Environment.getExternalStorageDirectory().path + "/DCIM", fileName)
     }
 
     override fun showErrorDialog() {
@@ -122,7 +120,10 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         when (v.id) {
             R.id.camera_capture_button -> presenter.onClickCaptureButton()
             R.id.camera_switch_button -> presenter.onClickSwitchButton()
-            R.id.flash_button -> presenter.onClickFlashButton()
+            R.id.flash_button -> {
+                flashButton.isSelected = !v.isSelected
+                presenter.onClickFlashButton()
+            }
         }
     }
 
@@ -243,5 +244,14 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View{
         }
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+        context?.let { presenter.onDestroyView(LocalBroadcastManager.getInstance(it)) }
+    }
 
+    override fun simulateClick() {
+        val shutter = container
+            .findViewById<ImageButton>(R.id.camera_capture_button)
+        shutter.simulateClick()
+    }
 }
