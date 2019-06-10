@@ -65,6 +65,8 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View, Au
         presenter.setView(this)
 
         textureView.performClick()
+
+        presenter.onViewCreated(activity.let { LocalBroadcastManager.getInstance(it!!)})
     }
 
     override fun multiTouchCallback(event: MotionEvent) {
@@ -127,7 +129,10 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View, Au
         }
     }
 
-
+    override fun onPause() {
+        presenter.onPause()
+        super.onPause()
+    }
 
     companion object {
 
@@ -242,11 +247,6 @@ class CameraFragment : Fragment(), View.OnClickListener, CameraContract.View, Au
                 container.postDelayed({ container.foreground = null }, ANIMATION_FAST_MILLIS)
             }, ANIMATION_SLOW_MILLIS)
         }
-    }
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        context?.let { presenter.onDestroyView(LocalBroadcastManager.getInstance(it)) }
     }
 
     override fun simulateClick() {

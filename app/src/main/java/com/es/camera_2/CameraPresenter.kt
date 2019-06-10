@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
@@ -140,6 +141,8 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
     private lateinit var characteristics: CameraCharacteristics
 
+    private lateinit var localBroadcastManager: LocalBroadcastManager
+
     /**
      * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
      * still image is ready to be saved.
@@ -206,7 +209,8 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         try {
             // Wait for camera to open - 2.5 seconds is sufficient
             if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
-                throw RuntimeException("Time out waiting to lock camera opening.")
+                Log.i("openCamera","Time out waiting to lock camera opening.")
+//                throw RuntimeException("Time out waiting to lock camera opening.")
             }
 
             launch(coroutineContext) {
@@ -262,11 +266,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
                 imageReader = ImageReader.newInstance(largest.width, largest.height,
                     ImageFormat.JPEG, /*maxImages*/ 10).apply {
-//                    launch {
-//                        withCamContext {
-                            setOnImageAvailableListener(onImageAvailableListener, null)
-//                        }
-//                    }
+                        setOnImageAvailableListener(onImageAvailableListener, null)
                 }
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
@@ -278,15 +278,15 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 val displayRotation = defaultDisplay.rotation
 
                 sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)
-//                val swappedDimensions = areDimensionsSwapped(displayRotation)
+                val swappedDimensions = areDimensionsSwapped(displayRotation)
 
 //                val metrics = DisplayMetrics().also { defaultDisplay.getRealMetrics(it) }
 //                val screenSize = Size(metrics.widthPixels, metrics.heightPixels)
 
                 val displaySize = Point()
                 defaultDisplay.getSize(displaySize)
-//                val rotatedPreviewWidth = if (swappedDimensions) height else width
-//                val rotatedPreviewHeight = if (swappedDimensions) width else height
+                val rotatedPreviewWidth = if (swappedDimensions) height else width
+                val rotatedPreviewHeight = if (swappedDimensions) width else height
 //                var maxPreviewWidth = if (swappedDimensions) displaySize.y else displaySize.x
 //                var maxPreviewHeight = if (swappedDimensions) displaySize.x else displaySize.y
 
@@ -303,7 +303,8 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 //                    largest
 //                )
 
-                previewSize = getPreferredPreviewSize(map.getOutputSizes(SurfaceTexture::class.java), width, height)//screenSize
+                previewSize = getPreferredPreviewSize(map.getOutputSizes(SurfaceTexture::class.java), rotatedPreviewWidth, rotatedPreviewHeight)//width, height)//screenSize
+                Log.i("presize","previewSize : $previewSize")
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 if (view.getResources()?.configuration?.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -318,7 +319,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                     characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
                 Log.i("flashSupported",""+flashSupported)
                 this@CameraPresenter.cameraId = cameraId
-                maximumZoomLevel = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+                maximumZoomLevel = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
 
                 // We've found a viable camera and finished setting up member variables,
                 // so we don't need to iterate through other available cameras.
@@ -432,7 +433,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
     ): R = coroutineScope {
         val closedAsync = CompletableDeferred<Unit>()
         val openedCameraAsync = CompletableDeferred<CameraDevice>(coroutineContext[Job])
-        val completionAsync = CompletableDeferred<Unit>(coroutineContext[Job])
+//        val completionAsync = CompletableDeferred<Unit>(coroutineContext[Job])
         val cameraUsageAsync: Deferred<R> = async(start = CoroutineStart.LAZY) {
             openedCameraAsync.await().use { cameraDevice ->
                 block(cameraDevice)
@@ -464,7 +465,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 Log.i("onError", "camera : $camera $error")
                 try {
                     onDisconnected(camera)
-                    camera?.close()
+                    camera.close()
 //                    completionAsync.completeExceptionally(CamStateException(State.Error(error)))
                     view.finish()
                 } catch (e: CamStateException) {
@@ -700,7 +701,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
             captureSession?.apply {
                 stopRepeating()
                 abortCaptures()
-                capture(captureBuilder?.build(), captureCallback, null)
+                captureBuilder?.let { capture(captureBuilder.build(), captureCallback, null) }
             }
 
         } catch (e: CameraAccessException) {
@@ -785,22 +786,17 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
                 // When the volume down button is pressed, simulate a shutter button click
                 KeyEvent.KEYCODE_VOLUME_DOWN -> {
                     view.simulateClick()
+                    onClickCaptureButton()
                 }
             }
         }
     }
 
-    override fun onDestroyView(localBroadcastManager: LocalBroadcastManager) {
+    override fun onDestroy() {
 
         // Unregister the broadcast receivers
         localBroadcastManager.unregisterReceiver(volumeDownReceiver)
 
-        // Turn off all camera operations when we navigate away
-        job.cancel()
-        cameraDevice?.close() //*crash Handler ending message to a Handler on a dead thread
-    }
-
-    override fun onDestroy() {
         job.cancel()
         cameraDevice?.close()
     }
@@ -858,7 +854,7 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
 
             val fingerSpacingValid = 6
 
-            var absoluteValue = Math.abs((fingerSpacing- currentFingerSpacing).toDouble()).toFloat() //Math.sqrt(Math.abs((fingerSpacing- currentFingerSpacing).pow(2).toDouble())).toFloat()
+            var absoluteValue = Math.abs((fingerSpacing- currentFingerSpacing).toDouble()).toFloat()
 //            Log.i("absoluteValue", "value : $absoluteValue /$fingerSpacing $currentFingerSpacing")
 
             if (absoluteValue > fingerSpacingValid) {
@@ -906,5 +902,17 @@ class CameraPresenter: CameraContract.Presenter, CoroutineScope {
         val x = event.getX(0) - event.getX(1)
         val y = event.getY(0) - event.getY(1)
         return Math.sqrt((x * x + y * y).toDouble()).toFloat()
+    }
+
+    @RequiresPermission(Manifest.permission.CAMERA)
+    override fun onViewCreated(localBroadcastManager: LocalBroadcastManager) {
+        // Set up the intent filter that will receive events from our main activity
+        val filter = IntentFilter().apply { addAction(KEY_EVENT_ACTION) }
+        this.localBroadcastManager = localBroadcastManager.also { it.registerReceiver(volumeDownReceiver, filter) }
+
+    }
+
+    override fun onPause() {
+        cameraDevice?.close()
     }
 }

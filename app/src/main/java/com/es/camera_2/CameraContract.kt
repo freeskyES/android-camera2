@@ -59,7 +59,9 @@ interface CameraContract {
 
         fun onDestroy()
 
-        fun onDestroyView(localBroadcastManager: LocalBroadcastManager)
+        fun onViewCreated(localBroadcastManager: LocalBroadcastManager)
+
+        fun onPause()
 
     }
 }
